@@ -1,0 +1,10 @@
+Erstellen eines Vektor Tile Sets mit Tippecanoe
+tippecanoe --coalesce-densest-as-needed --output-to-directory directory output_nodes.create_geojson
+oder
+tippecanoe --no-feature-limit --no-tile-size-limit --no-tile-compression --output-to-directory directory output_nodes.create_geojson
+
+Erstellen von mbtiles mit Tippecanoe
+# tippecanoe --no-feature-limit --no-tile-size-limit --no-tile-compression --output your_output_file.mbtiles input.create_geojson
+
+Tippecanoe Github
+https://github.com/mapbox/tippecanoe
