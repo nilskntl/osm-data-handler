@@ -1,31 +1,29 @@
 import os
-
-import requests
-
-import os
 import requests
 from tqdm import tqdm
+import json
 
 
-class OverpassAPI:
-    def __init__(self):
-        self.overpass_url = "https://overpass-api.de/api/interpreter"
+class FetchCoordinates:
+    def __init__(self, simplify_form=False, epsilon=0.0001):
+        self.__overpass_url = "https://overpass-api.de/api/interpreter"
+        self.__epsilon = epsilon
+        self.__simplify_form = simplify_form
+        self.__coordinates = []
 
-    def receive_coordinates(self, key):
-        overpass_query = f"""
-            [out:json];
-            area["ISO3166-1"="DE"][admin_level=2]->.searchArea;
-            (
-              node[{key}](area.searchArea);
-              way[{key}](area.searchArea);
-              relation[{key}](area.searchArea);
-            );
-            out geom;
-        """
-        return requests.post(self.overpass_url, data=overpass_query)
+    def getEpsilon(self):
+        return self.__epsilon
 
-    @staticmethod
-    def extract_coordinates(response):
+    def setEpsilon(self, epsilon):
+        self.__epsilon = epsilon
+
+    def getSimplifyForm(self):
+        return self.__simplify_form
+
+    def setSimplifyForm(self, simplify_form):
+        self.__simplify_form = simplify_form
+
+    def __extract_coordinates(self, response):
         coordinates_node = []
         coordinates_way = []
         coordinates_relation = []
@@ -70,15 +68,68 @@ class OverpassAPI:
 
             coordinates_way = list(unique_coordinates_way)
             coordinates_relation = list(unique_coordinates_relation)
+            if self.__simplify_form:
+                coordinates_way = self.__simplify_coordinates(coordinates=coordinates_way)
+                coordinates_relation = self.__simplify_coordinates(coordinates=coordinates_relation)
+
         else:
             print("Fehler bei der Abfrage der Daten. Statuscode:", response.status_code)
 
-        return coordinates_node, coordinates_way, coordinates_relation
+        return [{"type": "nodes", "coordinates": coordinates_node},
+                {"type": "ways", "coordinates": coordinates_way},
+                {"type": "relations", "coordinates": coordinates_relation}]
 
-
-class CoordinatesProcessor:
+    def fetch_coordinates(self, key):
+        overpass_query = f"""
+            [out:json];
+            area["ISO3166-1"="DE"][admin_level=2]->.searchArea;
+            (
+              node[{key}](area.searchArea);
+              way[{key}](area.searchArea);
+              relation[{key}](area.searchArea);
+            );
+            out geom;
+        """
+        response = requests.post(self.__overpass_url, data=overpass_query)
+        return self.__extract_coordinates(response)
     @staticmethod
-    def douglas_peucker(points, epsilon):
+    def read_coordinates(file_path):
+
+        with open(file_path) as f:
+            coordinates = json.load(f)
+
+        return coordinates
+
+    def get_coordinates_batch(self, keys):
+        progress_bar = tqdm(total=len(keys), position=0, unit='result')  # Create a single progress bar
+
+        coordinates_batch = []
+
+        for key in keys:
+            progress_bar.set_description(f"Receiving coordinates for: {key}")
+            coordinates_batch.append(self.get_coordinates(key))
+            progress_bar.update(1)  # Update the progress bar
+
+        coordinates = []
+        for i in range(len(coordinates_batch)):
+            for x in range(len(coordinates_batch[i])):
+                coordinates.append(coordinates_batch[i][x])
+
+        return coordinates
+
+    def __douglas_peucker(self, points):
+
+        def perpendicular_distance(point, line_start, line_end):
+            x, y = point
+            x1, y1 = line_start
+            x2, y2 = line_end
+
+            # Calculate the perpendicular distance
+            denominator = ((y2 - y1) ** 2 + (x2 - x1) ** 2) ** 0.5
+            if denominator == 0:
+                return 0  # Avoid division by zero
+            return abs((y2 - y1) * x - (x2 - x1) * y + x2 * y1 - y2 * x1) / denominator
+
         if len(points) <= 4:
             return points
 
@@ -87,16 +138,15 @@ class CoordinatesProcessor:
         index = 0
         end = len(points) - 1
         for i in range(1, end):
-            d = CoordinatesProcessor.perpendicular_distance(points[i], points[0], points[end])
+            d = perpendicular_distance(points[i], points[0], points[end])
             if d > dmax:
                 index = i
                 dmax = d
 
         # If the maximum distance is greater than epsilon, recursively simplify
-        # If the maximum distance is greater than epsilon, recursively simplify
-        if dmax > epsilon:
-            results1 = CoordinatesProcessor.douglas_peucker(points[:index + 1], epsilon)
-            results2 = CoordinatesProcessor.douglas_peucker(points[index:], epsilon)
+        if dmax > self.__epsilon:
+            results1 = self.__douglas_peucker(points[:index + 1])
+            results2 = self.__douglas_peucker(points[index:])
 
             # Convert results1 and results2 to lists before concatenating
             results1 = list(results1)
@@ -108,108 +158,18 @@ class CoordinatesProcessor:
         # If the maximum distance is not greater than epsilon, return exactly 4 points
         return [points[0], points[index // 2], points[(index + end) // 2], points[end]]
 
-    @staticmethod
-    def perpendicular_distance(point, line_start, line_end):
-        x, y = point
-        x1, y1 = line_start
-        x2, y2 = line_end
-
-        # Calculate the perpendicular distance
-        denominator = ((y2 - y1) ** 2 + (x2 - x1) ** 2) ** 0.5
-        if denominator == 0:
-            return 0  # Avoid division by zero
-        return abs((y2 - y1) * x - (x2 - x1) * y + x2 * y1 - y2 * x1) / denominator
-
-    @staticmethod
-    def simplify_way(way, epsilon):
-        simplified_way = CoordinatesProcessor.douglas_peucker(way, epsilon)
-        return simplified_way
-
-    @staticmethod
-    def simplify_coordinates(coordinates, epsilon):
+    def __simplify_coordinates(self, coordinates):
         simplified_coordinates = []
 
         for item in coordinates:
             if isinstance(item[0], tuple):  # Check if it's a list of coordinates (way)
-                simplified_item = CoordinatesProcessor.simplify_way(item, epsilon)
+                simplified_item = self.__douglas_peucker(item)
                 simplified_coordinates.append(simplified_item)
-            elif isinstance(item[0], list):  # Check if it's a list of lists (relation)
-                simplified_relation = []
-                for way in item:
-                    simplified_way = CoordinatesProcessor.simplify_way(way, epsilon)
-                    simplified_relation.append(simplified_way)
-                simplified_coordinates.append(simplified_relation)
 
         return simplified_coordinates
 
     @staticmethod
-    def write_coordinates_to_file(file_path, coordinates_list):
-        # Check if the directory of the file_path exists, if not, create it
-        directory = os.path.dirname(file_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
+    def save_coordinates(file_path, coordinates):
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'w') as file:
-            for item in coordinates_list:
-                if isinstance(item[0], tuple):  # Check if it's a list of coordinates
-                    for coord in item:
-                        file.write(f"{coord[0]}, {coord[1]}\n")
-                    file.write("\n")
-                else:
-                    file.write(f"{item[0]}, {item[1]}\n")
-
-    def __init__(self, detailed_polygons, epsilon, output_directory):
-        self.detailed_polygons = detailed_polygons
-        self.epsilon = epsilon
-        self.output_directory = output_directory
-
-    def get_coordinates(self, keys, types):
-        overpass_api = OverpassAPI()
-
-        progress_bar = tqdm(total=len(keys), position=0, unit='result')  # Create a single progress bar
-
-        for key in keys:
-            progress_bar.set_description(f"Receiving coordinates for: {key}")
-            index = keys.index(key)
-            max_index = len(keys)
-            response = overpass_api.receive_coordinates(key)
-            coordinates = overpass_api.extract_coordinates(response)
-
-            if self.detailed_polygons:
-                for type_ in types:
-                    coordinates_type = coordinates[types.index(type_)]
-                    file_path = f"{self.output_directory}/coordinates/coordinates_{key}_{type_}.txt"
-                    CoordinatesProcessor.write_coordinates_to_file(file_path, coordinates_type)
-
-            for type_coordinates in types:
-                file_path = f"{self.output_directory}/simplified_coordinates/simplified_coordinates_{key}_{type_coordinates}.txt"
-                if 'nodes' in type_coordinates:
-                    CoordinatesProcessor.write_coordinates_to_file(file_path,
-                                                                   coordinates[types.index(type_coordinates)])
-                else:
-                    simplified_coordinates = CoordinatesProcessor.simplify_coordinates(
-                        coordinates[types.index(type_coordinates)], self.epsilon)
-                    CoordinatesProcessor.write_coordinates_to_file(file_path, simplified_coordinates)
-
-            progress_bar.update(1)  # Update the progress bar
-
-if __name__ == "__main__":
-    processor = CoordinatesProcessor(False, 0.0001, "../output")
-
-    keys = [
-        '"amenity"="school"',
-        '"building"="school"',
-        '"amenity"="kindergarten"',
-        '"building"="kindergarten"',
-        '"leisure"="playground"',
-        '"playground:theme"="playground"',
-        '"highway"="pedestrian"',
-    ]
-
-    types = [
-        'nodes',
-        'ways',
-        'relations'
-    ]
-
-    processor.get_coordinates(keys, types)
+            file.write(json.dumps(coordinates))
