@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/greenzone-data.iml" filepath="$PROJECT_DIR$/.idea/greenzone-data.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/process_osm_data.iml" filepath="$PROJECT_DIR$/.idea/process_osm_data.iml" />
     </modules>
   </component>
 </project>
