@@ -92,6 +92,7 @@ class FetchCoordinates:
         """
         response = requests.post(self.__overpass_url, data=overpass_query)
         return self.__extract_coordinates(response)
+
     @staticmethod
     def read_coordinates(file_path):
 
@@ -107,7 +108,7 @@ class FetchCoordinates:
 
         for key in keys:
             progress_bar.set_description(f"Receiving coordinates for: {key}")
-            coordinates_batch.append(self.get_coordinates(key))
+            coordinates_batch.append(self.fetch_coordinates(key))
             progress_bar.update(1)  # Update the progress bar
 
         coordinates = []
