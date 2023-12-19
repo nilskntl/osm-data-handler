@@ -39,14 +39,14 @@ class FetchCoordinates:
                 if element['type'] == 'node':
                     lat = element["lat"]
                     lon = element["lon"]
-                    coordinates_node.append((lat, lon))
+                    coordinates_node.append((lon, lat))
 
                 elif element['type'] == 'way':
                     coordinate_one_way = []
                     for geometry_element in element["geometry"]:
                         lat = geometry_element["lat"]
                         lon = geometry_element["lon"]
-                        coordinate_one_way.append((lat, lon))
+                        coordinate_one_way.append((lon, lat))
                     # Füge nur eindeutige Koordinaten für Ways hinzu
                     unique_coordinates_way.add(tuple(coordinate_one_way))
 
@@ -60,7 +60,7 @@ class FetchCoordinates:
                                 lat = geometry_element.get('lat')
                                 lon = geometry_element.get('lon')
                                 if lat and lon:
-                                    way_coordinates.append((lat, lon))
+                                    way_coordinates.append((lon, lat))
                             if way_coordinates:
                                 # Füge nur eindeutige Koordinaten für Relations hinzu
                                 unique_coordinates_relation.add(tuple(way_coordinates))
@@ -79,7 +79,8 @@ class FetchCoordinates:
                 {"type": "ways", "coordinates": coordinates_way},
                 {"type": "relations", "coordinates": coordinates_relation}]
 
-    def fetch_coordinates(self, key):
+    def __fetch_coordinates(self, key):
+
         overpass_query = f"""
             [out:json];
             area["ISO3166-1"="DE"][admin_level=2]->.searchArea;
@@ -93,6 +94,12 @@ class FetchCoordinates:
         response = requests.post(self.__overpass_url, data=overpass_query)
         return self.__extract_coordinates(response)
 
+    def fetch_coordinates(self, key):
+        print(f'Receiving coordinates for: {key}')
+        coordinates = self.__fetch_coordinates(key)
+        print(f'All coordinates received')
+        return coordinates
+
     @staticmethod
     def read_coordinates(file_path):
 
@@ -101,20 +108,22 @@ class FetchCoordinates:
 
         return coordinates
 
-    def get_coordinates_batch(self, keys):
+    def fetch_coordinates_batch(self, keys):
         progress_bar = tqdm(total=len(keys), position=0, unit='result')  # Create a single progress bar
 
         coordinates_batch = []
 
         for key in keys:
             progress_bar.set_description(f"Receiving coordinates for: {key}")
-            coordinates_batch.append(self.fetch_coordinates(key))
+            coordinates_batch.append(self.__fetch_coordinates(key))
             progress_bar.update(1)  # Update the progress bar
 
         coordinates = []
         for i in range(len(coordinates_batch)):
             for x in range(len(coordinates_batch[i])):
                 coordinates.append(coordinates_batch[i][x])
+
+        print(f'All coordinates received')
 
         return coordinates
 

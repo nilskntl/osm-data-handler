@@ -9,11 +9,11 @@ from tqdm import tqdm
 
 
 class GeoJSONProcessor:
-    def __init__(self, simplify_polygons=True, simplify_factor=2.0, polygon_range=100, marker_color='#ff0000'):
+    def __init__(self, simplify_polygons=True, simplify_factor=2.0, polygon_range=100, properties=None):
+        self.__properties = properties
         self.__simplify_polygons = simplify_polygons
         self.__simplify_factor = simplify_factor
         self.__polygon_range = polygon_range
-        self.__marker_color = marker_color
 
     def set_simplify_factor(self, simplify_factor):
         self.__simplify_factor = simplify_factor
@@ -32,12 +32,6 @@ class GeoJSONProcessor:
 
     def get_detailed_polygons(self):
         return self.__simplify_polygons
-
-    def set_marker_color(self, marker_color):
-        self.__marker_color = marker_color
-
-    def get_marker_color(self):
-        return self.__marker_color
 
     def create_features_batch(self, coordinates_batch):
 
@@ -72,10 +66,10 @@ class GeoJSONProcessor:
         number_features = 0
         # Calculate number of features
         for geometry_type in coordinates:
-            number_features = number_features + len(geometry_type[1])
+            number_features = number_features + len(geometry_type['coordinates'])
 
         progress_bar = tqdm(total=number_features, desc=f"Creating geojson",
-                            position=0, unit='form')  # Create a single progress bar
+                            position=0, unit=' forms')  # Create a single progress bar
 
         def add_feature(geometry):
             if self.__polygon_range > 0:
@@ -86,7 +80,7 @@ class GeoJSONProcessor:
                     pyproj.Transformer.from_crs("EPSG:32633", "EPSG:4326", always_xy=True).transform,
                     geometry)
 
-            feature = Feature(geometry=geometry, properties={'marker-color': self.__marker_color})
+            feature = Feature(geometry=geometry, properties=self.__properties)
             features.append(feature)
             progress_bar.update(1)
 
@@ -95,8 +89,8 @@ class GeoJSONProcessor:
             return transform(utm_proj, Point(longitude, latitude))
 
         for geometry_type in coordinates:
-            if geometry_type[0] == 'nodes':
-                for lon, lat in geometry_type[1]:
+            if geometry_type["type"] == 'nodes':
+                for lon, lat in geometry_type["coordinates"]:
                     if self.__polygon_range > 0:
                         utm_point = lonlat_to_utm(lon, lat)
                         circle_buffer = utm_point.buffer(self.__polygon_range)
@@ -106,7 +100,7 @@ class GeoJSONProcessor:
                         add_feature(point)
 
             else:
-                for way in geometry_type[1]:
+                for way in geometry_type["coordinates"]:
                     if self.__polygon_range > 0:
                         line = LineString([lonlat_to_utm(lon, lat) for lon, lat in way])
                         line_buffer = line.buffer(self.__polygon_range)
@@ -132,7 +126,7 @@ class GeoJSONProcessor:
 
         merged_features = []
         for geom in merged.geoms:
-            feature = Feature(geometry=geom, properties={'marker-color': self.__marker_color})
+            feature = Feature(geometry=geom, properties=self.__properties)
             merged_features.append(feature)
             progress_bar.update(1)  # Update the progress bar
 
