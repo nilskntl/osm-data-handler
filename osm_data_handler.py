@@ -9,13 +9,13 @@ from shapely.ops import transform, unary_union
 from tqdm import tqdm
 
 
-class Coordinates:
+class Fetch:
     def __init__(self, simplify_form=False, epsilon=0.0001):
         """
         Initializes a new instance of FetchCoordinates.
 
-        :param simplify_form: If True, simplifies the coordinates using Douglas-Peucker algorithm.
-        :param epsilon: The epsilon value for the Douglas-Peucker algorithm.
+        :param simplify_form: If True, simplifies the coordinates using Douglas-Peucker algorithm (default is False).
+        :param epsilon: The epsilon value for the Douglas-Peucker algorithm (default is 0.0001).
         """
         self.__overpass_url = "https://overpass-api.de/api/interpreter"
         self.__epsilon = epsilon
@@ -54,41 +54,30 @@ class Coordinates:
         """
         return self.__simplify_form
 
-    def fetch_coordinates(self, key):
+    def fetch_coordinates(self, key, area=None):
         """
         Fetches coordinates for a given key.
 
         :param key: The key to fetch coordinates for.
+        :param area: The area in which you are searching (default is Worldwide (None)).
         :return: A list of dictionaries containing coordinates for nodes, ways, and relations.
         """
         print(f'Receiving coordinates for: {key}')
         if key in self.__cached_coordinates:
             coordinates = self.__cached_coordinates[key]
         else:
-            coordinates = self.__fetch_coordinates(key)
+            coordinates = self.__fetch_coordinates(key, area)
             self.__cached_coordinates[key] = coordinates
 
         print(f'All coordinates received')
-        return coordinates
+        return Coordinates(coordinates)
 
-    @staticmethod
-    def read_coordinates(file_path):
-        """
-        Reads coordinates from a JSON file.
-
-        :param file_path: The path to the JSON file.
-        :return: The coordinates read from the file.
-        """
-        with open(file_path) as f:
-            coordinates = json.load(f)
-
-        return coordinates
-
-    def fetch_coordinates_batch(self, keys):
+    def fetch_coordinates_batch(self, keys, area=None):
         """
         Fetches coordinates for a batch of keys.
 
         :param keys: A list of keys to fetch coordinates for.
+        :param area: The area in which you are searching (default is Worldwide (None)).
         :return: A list of dictionaries containing coordinates for nodes, ways, and relations.
         """
         progress_bar = tqdm(total=len(keys), position=0, unit='result')
@@ -97,7 +86,7 @@ class Coordinates:
 
         for key in keys:
             progress_bar.set_description(f"Receiving coordinates for: {key}")
-            coordinates_batch.append(self.__fetch_coordinates(key))
+            coordinates_batch.append(self.__fetch_coordinates(key, area))
             progress_bar.update(1)
 
         coordinates = []
@@ -107,21 +96,9 @@ class Coordinates:
 
         print(f'All coordinates received')
 
-        return coordinates
+        return Coordinates(coordinates)
 
-    @staticmethod
-    def save(coordinates, file_path):
-        """
-        Saves coordinates to a JSON file.
-
-        :param coordinates: The coordinates to save.
-        :param file_path: The path to the JSON file.
-        """
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w') as file:
-            file.write(json.dumps(coordinates))
-
-    def __fetch_coordinates(self, key):
+    def __fetch_coordinates(self, key, area):
         """
         Fetches coordinates from the Overpass API for a given key.
 
@@ -130,7 +107,7 @@ class Coordinates:
         """
         overpass_query = f"""
             [out:json];
-            area["ISO3166-1"="DE"][admin_level=2]->.searchArea;
+            area{area}->.searchArea;
             (
               node[{key}](area.searchArea);
               way[{key}](area.searchArea);
@@ -141,7 +118,8 @@ class Coordinates:
         response = requests.post(self.__overpass_url, data=overpass_query)
         return self.__extract_coordinates(response)
 
-    def __extract_coordinates(self, response):
+    @staticmethod
+    def __extract_coordinates(response):
         """
         Extracts coordinates from the Overpass API response.
 
@@ -174,11 +152,6 @@ class Coordinates:
 
                     coordinates_relation.append(relation_coordinates)
 
-            if self.__simplify_form:
-                coordinates_way = [self.__simplify_coordinates(coordinates=way) for way in coordinates_way]
-                coordinates_relation = [self.__simplify_coordinates(coordinates=relation) for relation in
-                                        coordinates_relation]
-
         else:
             print("Error when requesting the data. Status code:", response.status_code)
 
@@ -188,7 +161,101 @@ class Coordinates:
             {"type": "relations", "coordinates": coordinates_relation}
         ]
 
-    def __douglas_peucker(self, points):
+
+class Coordinates:
+    def __init__(self, coordinates=None):
+        """
+        Initializes a new instance of Coordinates.
+
+        :param coordinates: The coordinates to store (default is None).
+        """
+        self.__coordinates = coordinates
+
+    def __str__(self):
+        return self.__coordinates
+
+    def __repr__(self):
+        return self.__coordinates
+
+    def __eq__(self, other):
+        return self.__coordinates == other.__coordinates
+
+    def __hash__(self):
+        return hash(self.__coordinates)
+
+    def get(self):
+        """
+        Gets the coordinates.
+
+        :return: The list of coordinates.
+        """
+        return self.__coordinates
+
+    def set(self, coordinates):
+        """
+        Sets the coordinates.
+
+        :param coordinates: The coordinates to set.
+        """
+        self.__coordinates = coordinates
+
+    def save(self, file_path):
+        """
+        Saves coordinates to a JSON file.
+
+        :param file_path: The path to the JSON file.
+        """
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'w') as file:
+            file.write(json.dumps(self.__coordinates))
+
+    def read(self, file_path):
+        """
+        Reads coordinates from a JSON file.
+
+        :param file_path: The path to the JSON file.
+        """
+        with open(file_path) as f:
+            coordinates = json.load(f)
+
+        self.__coordinates = coordinates
+
+    def simplify(self, epsilon):
+        """
+        Simplifies the coordinates using the Douglas-Peucker algorithm.
+
+        :param epsilon: The epsilon value for the Douglas-Peucker algorithm (default is 0.0001).
+        :return: New instance of Coordinates with simplified coordinates
+        """
+        simplified_coordinates = []
+        for item in self.__coordinates:
+            if item["type"] == 'ways' or item["type"] == 'relations':
+                simplified_coordinates = self.__simplify_coordinates(item["coordinates"], epsilon)
+                simplified_coordinates.append(
+                    {"type": item["type"], "coordinates": simplified_coordinates}
+                )
+            else:
+                simplified_coordinates.append(item)
+
+        return Coordinates(simplified_coordinates)
+
+    def __simplify_coordinates(self, coordinates, epsilon):
+        """
+        Simplifies a list of coordinates using the Douglas-Peucker algorithm.
+
+        :param coordinates: The list of coordinates to simplify.
+        :return: The simplified list of coordinates.
+        """
+        simplified_coordinates = []
+
+        for item in coordinates:
+            if isinstance(item[0], tuple):
+                simplified_item = self.__douglas_peucker(item, epsilon)
+                simplified_coordinates.append(simplified_item)
+
+        return simplified_coordinates
+
+    def __douglas_peucker(self, points, epsilon):
         """
         Applies the Douglas-Peucker algorithm to simplify a list of points.
         https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
@@ -223,9 +290,9 @@ class Coordinates:
                 dmax = d
 
         # If the maximum distance is greater than epsilon, recursively simplify
-        if dmax > self.__epsilon:
-            results1 = self.__douglas_peucker(points[:index + 1])
-            results2 = self.__douglas_peucker(points[index:])
+        if dmax > epsilon:
+            results1 = self.__douglas_peucker(points[:index + 1], epsilon)
+            results2 = self.__douglas_peucker(points[index:], epsilon)
 
             # Convert results1 and results2 to lists before concatenating
             results1 = list(results1)
@@ -236,22 +303,6 @@ class Coordinates:
 
         # If the maximum distance is not greater than epsilon, return exactly 4 points
         return [points[0], points[index // 2], points[(index + end) // 2], points[end]]
-
-    def __simplify_coordinates(self, coordinates):
-        """
-        Simplifies a list of coordinates using the Douglas-Peucker algorithm.
-
-        :param coordinates: The list of coordinates to simplify.
-        :return: The simplified list of coordinates.
-        """
-        simplified_coordinates = []
-
-        for item in coordinates:
-            if isinstance(item[0], tuple):
-                simplified_item = self.__douglas_peucker(item)
-                simplified_coordinates.append(simplified_item)
-
-        return simplified_coordinates
 
 
 class GeoJSON:
