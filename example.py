@@ -1,53 +1,39 @@
-
+from coordinates import Coordinates
 from fetch import Fetch
 
 if __name__ == "__main__":
-
-
     """
-    Fetch coordinates 
+    Coordinates example.
     """
 
-    epsilon = 0.0001
-    detailed_polygons = False
-    simplify_factor = 4.0
-    polygon_range = 100
-    output_directory = "output"
+    # Fetch coordinates for a single key
+    coordinates = Fetch.fetch_coordinates(key="building=house")
+    # Fetch coordinates for a list of keys
+    coordinates_batch = Fetch.fetch_coordinates_batch(
+        keys=["building=house", "building=apartments"])
+    # Fetch coordinates for a list of keys in a specific area
+    coordinates_batch_and_area = Fetch.fetch_coordinates_batch(keys=["building=house", "building=apartments"],
+                                                               area='["ISO3166-1"="DE"][admin_level=2]')
+    # Simplify coordinates
+    simplified_coordinates = coordinates_batch.simplify(epsilon=0.0001)
+    # Save coordinates to a file
+    coordinates.save("output/example.json")
+    # Everything in one line
+    Fetch.fetch_coordinates(key="building=house").simplify(epsilon=0.0001).save("output/example.json")
 
-    foo = [
-        '"amenity"="school"',
-        '"building"="school"',
-        '"amenity"="kindergarten"',
-        '"building"="kindergarten"',
-        '"leisure"="playground"',
-        '"playground:theme"="playground"',
-        #'"highway"="pedestrian"',
-        #'"area:highway"="pedestrian"',
-        '"community_centre"="youth_centre"',
-        '"social_facility:for"="youth"',
-        '"club"="youth"',
-        '"social_facility:for"="child"',
-        '"community_centre:for"="child;juvenile"',
-        '"healthcare:speciality"="child_psychiatry"',
-        '"community_centre:for"="child"',
-        '"social_facility:for"="child;juvenile"',
-        '"retreat:for"="child"',
-        '"community_centre:for"="juvenile;child"',
-    ]
+    """
+    GeoJSON features example.
+    """
 
-    bar = [
-        '"highway"="pedestrian"',
-        '"area:highway"="pedestrian"'
-    ]
-
-    coordinates = Fetch.fetch_coordinates_batch(bar, '["ISO3166-1"="DE"][admin_level=2]')
-    coordinates.save("output/testfile/test1.json")
-    coordinates.to_geojson_features().buffer(10).buffer(10).save("output/testfile/test2.json")
-
-    #print(coordinates.to_geojson_features())
-
-"""
-geojson_processor = GeoJSONProcessor(detailed_polygons=detailed_polygons, simplify_factor=simplify_factor,
-                                         polygon_range=polygon_range, output_directory=output_directory)
-    geojson_processor.create_geojson_batch(items=foo, geometry_types=bar)
-"""
+    # Create GeoJSON features from coordinates
+    features = coordinates.to_features()
+    # Read GeoJSON features from a file of coordinates
+    features_from_file = Coordinates.read("output/example.json").to_features()
+    # Create buffer of 100m around GeoJSON features
+    buffered_features = features.buffer(100)
+    # Merge overlapping GeoJSON features
+    merged_features = features.merge_features()
+    # Save GeoJSON features to a file
+    features.save("output/example.geojson")
+    # Everything in one line
+    Coordinates.read("output/example.json").to_features().buffer(100).merge_features().save("output/example.geojson")
