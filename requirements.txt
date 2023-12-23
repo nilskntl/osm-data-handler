@@ -1,5 +1,0 @@
-pyproj
-geojson
-shapely
-tqdm
-requests
