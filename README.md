@@ -10,6 +10,7 @@ This repository contains Python scripts for fetching and processing geographical
    - [Saving Coordinates](#saving-coordinates)
    - [Simplifying Coordinates](#simplifying-coordinates)
    - [Converting to GeoJSON Features](#converting-to-geojson-features)
+   - [Adjust GeoJSON features](#adjust-geojson-features)
 3. [File Descriptions](#file-descriptions)
    - [fetch.py](#fetchpy)
    - [coordinates.py](#coordinatespy)
@@ -81,15 +82,17 @@ from coordinates import Coordinates
 geojson_features = coordinates.to_features()
 ```
 
-### Apply buffer and merge overlapping GeoJSON Features
+### Adjust GeoJSON Features
 
-To convert coordinates to GeoJSON features, use the `to_features` method of the `Coordinates` class:
+To apply a buffer, use the `buffer` method of the `Features` class:
+To merge overlapping features, use the `merge_features` method of the `Features` class:
+To save features to a file, use the `save` method of the `Features` class:
 
 ```python
 from features import Features
 
-# Example: Apply buffer (100m) to features and merge overlapping features
-merged_features_buffer = geojson_features.buffer(100).merge_features()
+# Example: Apply buffer (100m) to features, merge overlapping features and save to a file
+merged_features_buffer = geojson_features.buffer(100).merge_features().save("outpt/features.geojson")
 ```
 
 ## File Descriptions
