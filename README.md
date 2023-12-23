@@ -81,6 +81,17 @@ from coordinates import Coordinates
 geojson_features = coordinates.to_features()
 ```
 
+### Apply buffer and merge overlapping GeoJSON Features
+
+To convert coordinates to GeoJSON features, use the `to_features` method of the `Coordinates` class:
+
+```python
+from features import Features
+
+# Example: Apply buffer (100m) to features and merge overlapping features
+merged_features_buffer = geojson_features.buffer(100).merge_features()
+```
+
 ## File Descriptions
 
 ### fetch.py
