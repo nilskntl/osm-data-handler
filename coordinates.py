@@ -155,7 +155,7 @@ class Coordinates:
         # If the maximum distance is not greater than epsilon, return exactly 4 points
         return [points[0], points[index // 2], points[(index + end) // 2], points[end]]
 
-    def to__features(self):
+    def to_features(self):
         """
         Converts coordinates to GeoJSON features with Polygon and Point geometries.
 
