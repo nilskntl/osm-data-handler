@@ -1,3 +1,4 @@
+import json
 import os
 
 import pyproj
@@ -60,23 +61,42 @@ class Features:
             print(f'Saving geojson to: {file_path}')
             file.write(dumps(FeatureCollection(self.__features)))
 
+    @staticmethod
+    def read(file_path):
+        """
+        Reads GeoJSON FeatureCollection from a file and returns a Features instance.
+
+        :param file_path: Path to the GeoJSON file.
+        :return: Features instance containing the GeoJSON features.
+        """
+        print(f'Reading geojson from: {file_path}')
+        with open(file_path, 'r') as file:
+            geojson_data = json.load(file)
+
+        features_array = geojson_data.get('features', [])
+
+        return Features(features_array)
+
     def merge_features(self):
         """
         Merges overlapping GeoJSON features.
 
-        :return: List of merged GeoJSON features.
+        :return: New Features instance with list of merged GeoJSON features.
         """
         geometries = []
         merged_features = []
 
         for feature in self.__features:
-            # Check if the geometry coordinates have at least four points
-            if len(feature['geometry']['coordinates'][0]) < 3:
-                # Include geometries with less than four coordinates as is
-                merged_features.append(Feature(geometry=feature['geometry']))
-                continue
-            geometry = shape(feature['geometry'])
-            geometries.append(geometry)
+            try:
+                # Check if the geometry coordinates have at least four points
+                if len(feature['geometry']['coordinates'][0]) < 3:
+                    # Include geometries with less than four coordinates as is
+                    merged_features.append(Feature(geometry=feature['geometry']))
+                    continue
+                geometry = shape(feature['geometry'])
+                geometries.append(geometry)
+            except Exception as e:
+                print(e)
 
         buffered_geometries = [geom.buffer(0) for geom in geometries]  # Create minimal buffer (error handling)
 
@@ -100,7 +120,7 @@ class Features:
         Applies a buffer of a specified distance to the GeoJSON features.
 
         :param buffer_distance_meters: Buffer distance in meters (default is 100).
-        :return: List of GeoJSON features with buffers applied.
+        :return: New Features instance with list of GeoJSON features with buffers applied.
         """
         buffered_features = []
 
